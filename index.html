@@ -1,278 +1,404 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Gerador TOTP · MJ VENDAS</title>
+<meta charset="UTF-8">
+<title>MJ VENDAS • Gerador 2FA</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
 <style>
-  :root{
-    --bg:#0b0f12;
-    --panel:#0f1720;
-    --card:#0b1220;
-    --accent:#06b6d4;
-    --muted:#9aa6b2;
-    --glass: rgba(255,255,255,0.03);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0;font-family:Inter,system-ui,Roboto,Arial;background:linear-gradient(180deg,#071014 0%, #061219 100%);color:#e6eef6}
-  /* page layout */
-  .stage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px 24px;position:relative;overflow:hidden}
-  /* side animated layers */
-  .sideLayer{position:absolute;top:0;bottom:0;width:220px;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:18px;padding:28px}
-  .sideLayer.left{left:0;align-items:flex-start}
-  .sideLayer.right{right:0;align-items:flex-end}
-  .floatingCard{
-    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border:1px solid rgba(255,255,255,0.03);
-    padding:10px 12px;border-radius:10px;backdrop-filter: blur(4px);
-    color:var(--muted);font-weight:600;font-size:13px;
-    box-shadow: 0 6px 18px rgba(2,6,23,0.6);
-    transform: translateY(0);
-  }
-  /* floating motion */
-  @keyframes floatY { 0%{transform:translateY(0)}50%{transform:translateY(-10px)}100%{transform:translateY(0)}}
-  .floatA{animation:floatY 5s ease-in-out infinite;}
-  .floatB{animation:floatY 6.5s ease-in-out infinite;}
-  .floatC{animation:floatY 4.2s ease-in-out infinite;}
-  /* sliding marquees */
-  .marquee{overflow:hidden;white-space:nowrap;border-radius:8px;padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02);width:100%}
-  .marqueeInner{display:inline-block;padding-left:100%;animation:marq 12s linear infinite;color:var(--accent);font-weight:700}
-  @keyframes marq{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
-  /* subtle particle blobs */
-  .blob{position:absolute;width:260px;height:260px;border-radius:50%;filter:blur(30px);opacity:0.08;mix-blend-mode:screen}
-  .blob.left{left:-60px;top:20%;background:linear-gradient(135deg,#06b6d4,#3b82f6);}
-  .blob.right{right:-60px;bottom:18%;background:linear-gradient(135deg,#ef4444,#fb923c);}
-  /* main card */
-  .card{
-    width:100%;max-width:660px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border-radius:14px;padding:26px 26px 20px;box-shadow:0 30px 80px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03);position:relative;z-index:3;
-    display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;
-  }
-  /* responsive */
-  @media (max-width:860px){ .card{grid-template-columns:1fr;max-width:520px;padding:20px} .sideLayer{display:none} }
-  /* header / logo */
-  .brandBlock{display:flex;flex-direction:column;align-items:center;gap:6px;padding-bottom:6px}
-  #logoImg{width:96px;height:96px;border-radius:16px;object-fit:cover;border:2px solid rgba(6,182,212,0.12);box-shadow:0 8px 30px rgba(6,182,212,0.06)}
-  .brandTitle{font-size:18px;font-weight:700;color:#fff}
-  .brandSubtitle{font-size:13px;color:var(--accent);font-weight:700;letter-spacing:1px}
-  .signature{font-size:12px;color:var(--muted);margin-top:6px}
-  /* left content */
-  .leftCol{padding:6px 6px 6px 4px}
-  .instructions{background:var(--glass);padding:12px;border-radius:10px;font-size:13px;color:var(--muted);line-height:1.45;border:1px solid rgba(255,255,255,0.02)}
-  .hint{margin-top:10px;font-size:13px;color:var(--muted)}
-  /* right column - generator */
-  .rightCol{background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));padding:18px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
-  input[type="text"]{width:100%;padding:11px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;font-size:14px}
-  .row{display:flex;gap:8px;margin-top:10px}
-  .btn{padding:10px 12px;border-radius:10px;border:0;background:var(--accent);color:#032426;font-weight:700;cursor:pointer}
-  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted)}
-  .otpBox{margin-top:14px;padding:16px;border-radius:12px;background:linear-gradient(180deg, rgba(6,182,212,0.03), rgba(255,255,255,0.01));display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .otpCode{font-size:40px;font-weight:800;letter-spacing:6px;color:#fff}
-  .otpMeta{display:flex;flex-direction:column;align-items:flex-end;min-width:110px}
-  .timer{font-size:13px;color:var(--muted)}
-  .progress{width:120px;height:10px;background:rgba(255,255,255,0.05);border-radius:8px;overflow:hidden;margin-top:8px}
-  .progress > i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#75b0ff)}
-  .smallMuted{font-size:12px;color:var(--muted)}
-  /* footer */
-  .cardFooter{grid-column:1/-1;margin-top:14px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px}
-  .tag{background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:8px;font-weight:700;color:var(--muted);font-size:13px}
-  .signatureSmall{font-size:12px;color:var(--muted)}
-  /* subtle hover glow on interactive items */
-  button:focus, input:focus{outline:none;box-shadow:0 0 0 4px rgba(6,182,212,0.06);border-color:rgba(6,182,212,0.14)}
+/* Tema escuro */
+body{
+  background:#0b1620;
+  font-family:Inter;
+  color:#e8f0f6;
+  margin:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:100vh;
+}
+
+.container{
+  background:#0f1f2c;
+  padding:35px;
+  border-radius:14px;
+  width:380px;
+  text-align:center;
+  box-shadow:0 10px 40px rgba(0,0,0,0.6);
+}
+
+.logo-img{
+  width:70px;
+  border-radius:12px;
+  margin-bottom:10px;
+}
+
+h2{
+  margin:5px 0;
+}
+
+.subtitle{
+  font-size:13px;
+  opacity:0.7;
+}
+
+input{
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:8px;
+  background:#08141c;
+  color:white;
+  margin-top:15px;
+  font-size:14px;
+}
+
+.code{
+  font-size:42px;
+  letter-spacing:4px;
+  margin-top:20px;
+  font-weight:600;
+  cursor:pointer;
+  transition:0.2s;
+}
+.code:hover{
+  opacity:0.8;
+}
+
+.msg{
+  font-size:13px;
+  color:#19ff9a;
+  margin-top:10px;
+}
+
+.extra{
+  font-size:12px;
+  margin-top:5px;
+  opacity:0.8;
+}
+
+.toggle{
+  margin-top:18px;
+  font-size:13px;
+  cursor:pointer;
+  color:#1cffaa;
+}
+
+.footer{
+  font-size:11px;
+  opacity:0.5;
+  margin-top:20px;
+}
+
+.avaliacao{
+  margin-top:20px;
+  border-top:1px solid rgba(255,255,255,0.08);
+  padding-top:15px;
+}
+
+button{
+  background:#19ff9a;
+  border:none;
+  padding:8px 14px;
+  border-radius:6px;
+  cursor:pointer;
+  font-weight:600;
+  margin:4px;
+}
+
+button:hover{
+  background:#00e488;
+}
+
+.painel{
+  position:fixed;
+  right:20px;
+  top:50%;
+  transform:translateY(-50%);
+  background:#0f1f2c;
+  width:320px;
+  padding:20px;
+  border-radius:14px;
+  box-shadow:0 10px 40px rgba(0,0,0,0.7);
+  display:none;
+  max-height:80vh;
+  overflow:auto;
+}
+
+.painel h3{
+  margin:0;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.painel-desc{
+  font-size:12px;
+  opacity:0.7;
+  margin-bottom:12px;
+}
+
+.item2fa{
+  background:#08141c;
+  padding:10px;
+  border-radius:8px;
+  margin-bottom:10px;
+}
+
+.codigoMini{
+  font-size:20px;
+  font-weight:600;
+  cursor:pointer;
+  transition:0.2s;
+}
+.codigoMini:hover{
+  opacity:0.8;
+}
+
+.codigoMini.valid{
+  color:#19ff9a;
+}
+.codigoMini.expiring{
+  color:#ff4d4d;
+  font-weight:700;
+}
+
+.timer{
+  font-size:11px;
+  opacity:0.6;
+}
+
+.controles{
+  text-align:center;
+  margin-top:10px;
+}
 </style>
 </head>
+
 <body>
-  <section class="stage" aria-label="Gerador TOTP MJ VENDAS">
 
-    <!-- decorative blobs -->
-    <div class="blob left" aria-hidden="true"></div>
-    <div class="blob right" aria-hidden="true"></div>
+<div class="container">
 
-    <!-- left animated side -->
-    <aside class="sideLayer left" aria-hidden="true">
-      <div class="floatingCard floatA">Alavanque suas campanhas</div>
-      <div class="marquee"><div class="marqueeInner">CONTAS ANTIGAS •   AUMENTE SUA TAXA DE CONVERSÃO</div></div>
-      <div class="floatingCard floatB">Contas Aquecidas</div>
-      <div class="floatingCard floatC">IP BR </div>
-    </aside>
+<img class="logo-img" src="https://cdn.ggmax.com.br/avatar-images/656f823e921580ad52e62b38f93b71d6.webp">
 
-    <!-- right animated side -->
-    <aside class="sideLayer right" aria-hidden="true">
-      <div class="floatingCard floatB">MOUJUN_00</div>
-      <div class="marquee"><div class="marqueeInner">SITE OFICIAL</div>
-  
-      
-    </aside>
+<h2>MJ VENDAS</h2>
+<div class="subtitle">Gerador profissional 2FA</div>
 
-    <!-- main card -->
-    <div class="card" role="region" aria-labelledby="mainTitle">
-      <!-- left column -->
-      <div class="leftCol">
-        <div class="brandBlock" style="justify-content:center">
-          <img id="logoImg" src="https://cdn.ggmax.com.br/avatar-images/656f823e921580ad52e62b38f93b71d6.webp" alt="Logo MJ VENDAS">
-          <div class="brandTitle" id="mainTitle">MJ VENDAS</div>
-          <div class="brandSubtitle">Gerador 2FA · Authenticator</div>
-          <div class="signature">Desenvolvido por <strong>MOUJUN_00</strong></div>
-        </div>
+<input id="secret" placeholder="Cole a chave 2FA">
 
-        <div class="instructions" aria-live="polite" style="margin-top:12px">
-          <strong>Instruções rápidas </strong><br>
-          • Cole o Chave 2FA <br>
-          • Clique em <em>Gerar</em> para obter o código de 6 dígitos. O token atual expira a cada 30s.<br>
-          • Use o código exibido apenas na página oficial do serviço (ex.: login do Gmail). Mantenha a chave em local seguro; não compartilhe. <br>
-          <small class="smallMuted">Recomendado para equipes e operadores que precisam verificar acessos com TOTP localmente e com segurança.</small>
-        </div>
+<div class="code" id="code">------</div>
 
-        <div class="hint" style="margin-top:12px">
-          <span class="smallMuted">Dica:</span> evitar inserir chaves em sites públicos. Esse gerador roda 100% no seu navegador — nada sai do seu computador.
-        </div>
-      </div>
+<div class="msg" id="msg"></div>
 
-      <!-- right column (generator) -->
-      <div class="rightCol" aria-label="Gerador de código">
-        <label style="display:block;font-size:13px;color:var(--muted)"></label>
-        <input id="secret" type="text" inputmode="text" placeholder="Cole a Chave 2FA Aqui..." aria-label="Chave secreta">
-        <div class="row">
-          <button id="generateBtn" class="btn">Gerar</button>
-          <button id="pasteBtn" class="btn ghost" title="Colar da área de transferência">Colar</button>
-          <button id="copyBtn" class="btn ghost" title="Copiar OTP">Copiar</button>
-        </div>
+<div id="extra" style="display:none">
+  <div class="extra">Suporte disponível no chat da compra</div>
+  <div class="extra">Boa contingência 🚀</div>
+</div>
 
-        <div class="otpBox" role="status" aria-live="polite">
-          <div style="display:flex;flex-direction:column;align-items:flex-start">
-            <div class="otpCode" id="codeArea">------</div>
-            <div class="smallMuted" style="margin-top:6px">TOTP · 6 dígitos · SHA-1 · 30s</div>
-          </div>
-          <div class="otpMeta">
-            <div class="timer" id="timerArea">Aguardando</div>
-            <div class="progress" aria-hidden="true"><i id="progressBar"></i></div>
-          </div>
-        </div>
+<div class="toggle" onclick="togglePainel()">
+⚡ Quer mais praticidade?
+</div>
 
-        <div style="margin-top:12px;font-size:12px;color:var(--muted);text-align:left">
-          <strong>Observação de segurança:</strong> Não compartilhe a chave secreta. Use apenas em interfaces oficiais.
-        </div>
-      </div>
+<div class="avaliacao">
+<h4>As contas atenderam sua expectativa?</h4>
+<button onclick="votarSim()">👍 Sim</button>
+<button onclick="votarNao()">👎 Não</button>
+<p>👍 <span id="likes">0</span> aprovações</p>
+<p>👎 <span id="dislikes">0</span> reprovações</p>
+</div>
 
-      <!-- footer across -->
-      <div class="cardFooter">
-        <div class="tag">Painel Corporativo · MJ VENDAS</div>
-        <div class="signatureSmall">Assinado: <strong>MOUJUN_00</strong></div>
-      </div>
-    </div>
-  </section>
+<div class="footer">
+Ferramenta local • não compartilhamos dados
+</div>
+
+</div>
+
+<div class="painel" id="painel">
+
+<h3>
+  Painel de Códigos 2FA
+  <button style="background:#ff4d4d; font-size:14px; padding:4px 8px;" onclick="togglePainel()">Fechar</button>
+</h3>
+
+<div class="painel-desc">
+Criamos este painel para você programar vários códigos 2FA ao mesmo tempo,
+evitando precisar colar as chaves repetidamente.
+</div>
+
+<div id="lista2fa"></div>
+
+<div class="controles">
+<div>Quer adicionar mais código 2FA?</div>
+<button onclick="addCampo()">+</button>
+<button onclick="remCampo()">-</button>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsSHA/2.4.2/sha.js"></script>
 
 <script>
-/* TOTP + UI (tudo client-side) */
+let totalCampos=5
+const maxCampos=50
 
-/* helpers */
-function normalizeBase32(s){ return s.replace(/[^A-Z2-7=]/gi,'').replace(/\s+/g,'').toUpperCase(); }
-function base32ToBytes(base32){
-  const clean = normalizeBase32(base32).replace(/=+$/,'');
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let bits=0, value=0;
-  const out=[];
-  for(let i=0;i<clean.length;i++){
-    const idx = alphabet.indexOf(clean[i]);
-    if(idx === -1) continue;
-    value = (value<<5) | idx; bits += 5;
-    if(bits >= 8){ bits -= 8; out.push((value >> bits) & 0xFF); }
+function base32tohex(base32){
+  const base32chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits="", hex="";
+  base32=base32.replace(/ /g,"").toUpperCase();
+  for(let i=0;i<base32.length;i++){
+    let val=base32chars.indexOf(base32.charAt(i));
+    bits+=val.toString(2).padStart(5,"0");
   }
-  return new Uint8Array(out);
-}
-async function hmacSha1(keyBytes, messageBytes){
-  const key = await crypto.subtle.importKey('raw', keyBytes, {name:'HMAC', hash:'SHA-1'}, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, messageBytes);
-  return new Uint8Array(sig);
-}
-function intToBytesBE(n){
-  const b = new ArrayBuffer(8);
-  const view = new DataView(b);
-  let bn = BigInt(n);
-  for(let i=7;i>=0;i--){ view.setUint8(i, Number(bn & 0xFFn)); bn = bn >> 8n; }
-  return new Uint8Array(b);
-}
-async function generateTotpFromSecret(secretBase32, step=30){
-  const keyBytes = base32ToBytes(secretBase32);
-  if(!keyBytes || keyBytes.length === 0) throw new Error('Chave inválida');
-  const T = Math.floor(Date.now()/1000/step);
-  const counter = intToBytesBE(BigInt(T));
-  const hmac = await hmacSha1(keyBytes.buffer, counter.buffer);
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const code = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset+1] & 0xff) << 16) | ((hmac[offset+2] & 0xff) << 8) | (hmac[offset+3] & 0xff);
-  const otp = String(code % 1e6).padStart(6,'0');
-  const remaining = step - (Math.floor(Date.now()/1000) % step);
-  return {otp, remaining};
-}
-
-/* UI elements */
-const secretInput = document.getElementById('secret');
-const codeArea = document.getElementById('codeArea');
-const timerArea = document.getElementById('timerArea');
-const progressBar = document.getElementById('progressBar');
-const generateBtn = document.getElementById('generateBtn');
-const pasteBtn = document.getElementById('pasteBtn');
-const copyBtn = document.getElementById('copyBtn');
-
-let intervalHandle = null;
-let lastSecret = '';
-
-async function refreshOnce(){
-  const secret = secretInput.value.trim();
-  if(!secret){
-    codeArea.textContent = '------';
-    timerArea.textContent = 'Aguardando chave...';
-    progressBar.style.width = '0%';
-    return;
+  for(let i=0;i+4<=bits.length;i+=4){
+    let chunk=bits.substr(i,4);
+    hex+=parseInt(chunk,2).toString(16);
   }
-  try{
-    const res = await generateTotpFromSecret(secret, 30);
-    codeArea.textContent = res.otp;
-    timerArea.textContent = `Expira em ${res.remaining}s`;
-    const pct = ((30 - res.remaining)/30) * 100;
-    progressBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-  }catch(e){
-    codeArea.textContent = '------';
-    timerArea.textContent = 'Chave inválida';
-    progressBar.style.width = '0%';
+  return hex;
+}
+
+function gerarOTP(secret){
+  let key=base32tohex(secret)
+  let epoch=Math.round(Date.now()/1000)
+  let time=Math.floor(epoch/30).toString(16).padStart(16,"0")
+  let shaObj=new jsSHA("SHA-1","HEX")
+  shaObj.setHMACKey(key,"HEX")
+  shaObj.update(time)
+  let hmac=shaObj.getHMAC("HEX")
+  let offset=parseInt(hmac.substring(hmac.length-1),16)
+  let otp=(parseInt(hmac.substr(offset*2,8),16)&0x7fffffff)+""
+  return otp.substr(otp.length-6)
+}
+
+// Clique único para copiar código principal
+function copiarCodigoPrincipal(){
+  let codeEl = document.getElementById("code");
+  let otp = codeEl.innerText;
+  if(otp && otp !== "------"){
+    navigator.clipboard.writeText(otp);
+    document.getElementById("msg").innerText = "Código copiado automaticamente";
   }
 }
 
-generateBtn.addEventListener('click', ()=>{
-  if(intervalHandle) clearInterval(intervalHandle);
-  refreshOnce();
-  intervalHandle = setInterval(refreshOnce, 1000);
-});
+document.getElementById("code").addEventListener("click", copiarCodigoPrincipal);
 
-pasteBtn.addEventListener('click', async ()=>{
-  try{
-    const text = await navigator.clipboard.readText();
-    secretInput.value = text.trim();
-    generateBtn.click();
-  }catch(e){
-    alert('Não foi possível colar: ' + e.message);
+function gerar(){
+  let secret=document.getElementById("secret").value
+  if(secret.length<16)return
+  let otp=gerarOTP(secret)
+  document.getElementById("code").innerText=otp
+  copiarCodigoPrincipal();
+  document.getElementById("extra").style.display="block"
+}
+
+document.getElementById("secret").addEventListener("input",gerar)
+setInterval(gerar,30000)
+
+function togglePainel(){
+  let p=document.getElementById("painel")
+  p.style.display=p.style.display==="block"?"none":"block"
+}
+
+// Criar códigos 2FA com número, clique único e cores
+function criarCampo(){
+  let id = document.querySelectorAll(".item2fa").length + 1;
+  let div = document.createElement("div");
+  div.className = "item2fa";
+  div.innerHTML = `
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="font-size:22px; font-weight:700; color:#ff4d4d;">${id}</div>
+      <div style="flex:1">
+        <input id="secret${id}" placeholder="Chave 2FA ${id}">
+        <div class="codigoMini valid" id="code${id}">------</div>
+        <div class="timer" id="timer${id}"></div>
+      </div>
+    </div>
+  `;
+  document.getElementById("lista2fa").appendChild(div);
+
+  // Clique único para copiar
+  let codeEl = div.querySelector(".codigoMini");
+  codeEl.addEventListener("click", function(){
+    let otp = codeEl.innerText;
+    if(otp && otp !== "------"){
+      navigator.clipboard.writeText(otp);
+      document.getElementById("msg").innerText = `Código ${id} copiado!`;
+    }
+  });
+}
+
+function addCampo(){
+  if(totalCampos>=maxCampos)return
+  totalCampos++
+  criarCampo()
+}
+
+function remCampo(){
+  let lista=document.getElementById("lista2fa")
+  if(lista.children.length<=1)return
+  lista.removeChild(lista.lastChild)
+  totalCampos--
+}
+
+for(let i=0;i<totalCampos;i++) criarCampo()
+
+// Atualiza códigos 2FA e cores de expiração
+function atualizarMultiplos(){
+  for(let i=1;i<=totalCampos;i++){
+    let el=document.getElementById("secret"+i)
+    if(!el) continue
+    let secret=el.value
+    if(secret.length<16) continue
+    let otp=gerarOTP(secret)
+    let codeEl=document.getElementById("code"+i)
+    codeEl.innerText=otp
+    let segundos=30-(Math.floor(Date.now()/1000)%30)
+    document.getElementById("timer"+i).innerText="expira em "+segundos+"s"
+
+    if(segundos<=5){
+      codeEl.classList.add("expiring");
+      codeEl.classList.remove("valid");
+    }else{
+      codeEl.classList.add("valid");
+      codeEl.classList.remove("expiring");
+    }
   }
-});
+}
 
-copyBtn.addEventListener('click', async ()=>{
-  try{
-    const txt = codeArea.textContent.trim();
-    if(!txt || txt === '------') { alert('Nenhum código válido para copiar'); return; }
-    await navigator.clipboard.writeText(txt);
-    copyBtn.textContent = 'Copiado!';
-    setTimeout(()=> copyBtn.textContent = 'Copiar', 1200);
-  }catch(e){
-    alert('Erro ao copiar: ' + e.message);
-  }
-});
-
-/* auto start if user pastes or has value */
-if(secretInput.value.trim() !== ''){ generateBtn.click(); }
-
-/* small accessibility: allow Enter to generate */
-secretInput.addEventListener('keydown',(ev)=>{
-  if(ev.key === 'Enter'){ generateBtn.click(); ev.preventDefault(); }
-});
+setInterval(atualizarMultiplos,1000)
 </script>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+var firebaseConfig={
+apiKey:"AIzaSyALqmeGhhHIX62ptIK7sviv7OkoawXAE1g",
+authDomain:"desbloqueio-cartao-recomecar.firebaseapp.com",
+databaseURL:"https://desbloqueio-cartao-recomecar-default-rtdb.firebaseio.com",
+projectId:"desbloqueio-cartao-recomecar"
+};
+firebase.initializeApp(firebaseConfig)
+var db=firebase.database()
+var likesRef=db.ref("avaliacoes/sim")
+var dislikesRef=db.ref("avaliacoes/nao")
+likesRef.on("value",snap=>{
+  document.getElementById("likes").innerText=snap.val()||0
+})
+dislikesRef.on("value",snap=>{
+  document.getElementById("dislikes").innerText=snap.val()||0
+})
+function votarSim(){
+  if(localStorage.getItem("votou")) return alert("Você já votou")
+  likesRef.transaction(n=>(n||0)+1)
+  localStorage.setItem("votou","sim")
+}
+function votarNao(){
+  if(localStorage.getItem("votou")) return alert("Você já votou")
+  dislikesRef.transaction(n=>(n||0)+1)
+  localStorage.setItem("votou","nao")
+}
+</script>
+
 </body>
 </html>
